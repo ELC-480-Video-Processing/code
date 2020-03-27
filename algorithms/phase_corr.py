@@ -1,39 +1,18 @@
 """
-Phase Correlation implementation in Python
-Michael Ting
-Created 25 June 2013
-Updated 8 July 2013
-
-Algorithm:
-    Given two input images A and B:
-    Apply window function on both A and B to reduce edge effects
-    Calculate the discrete 2D Fourier transform of both A and B
-        G_a = F{A}
-        G_b = F{B}
-    Calculate the cross-power spectrum by taking the complex conjugate of G_b,
-        multiplying the Fourier transforms together elementwise, and normalizing
-        the product elementwise
-        R = (G_a %*% G_B*) / (|G_a G_b*|)
-            %*% is the Hadamard (entry-wise) product
-    Obtain normalized cross-correlation by applying the inverse Fourier transform
-        r = F^-1{R}
-    Determine the location of the peak in r:
-        (del_x, del_y) = argmax over (x,y) of {r}
+Phase correlation implementation in Python using cv2 and numpy
 """
 
+import cv2
+from argparse import ArgumentParser
+from mpl_toolkits import mplot3d
+
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 import numpy as np
-from scipy import misc
-
-import cv2
-
-from argparse import ArgumentParser
-
-from mpl_toolkits import mplot3d
-import matplotlib.pyplot as plt 
 
 
-# a and b are numpy arrays
 def phase_correlation(a, b):
 
     G_a = np.fft.fft2(a)
@@ -47,6 +26,62 @@ def phase_correlation(a, b):
     r = np.fft.ifft2(R).real
     return r
 
+
+def plot_results(map):
+
+    """
+        Plots the output of phase correlation in a 3D Meshgrid 
+        @param map: a 2D np array consisting of real phase correlation data 
+
+    """
+
+    # Create axis vectors for matplotlib
+    X = np.arange(0, 360, step=1)
+    Y = np.arange(0, 360, step=1)
+    X, Y = np.meshgrid(X, Y)
+
+    # Plot 3D Meshplot of Phase corrleation data
+    fig = plt.figure()
+    ax  = fig.gca(projection = '3d')
+    surf = ax.plot_surface(X,Y, map, cmap = cm.coolwarm, linewidth=0, antialiased=False)
+
+    plt.show()
+
+def pad_image (obj_frame, master_vid_shape):
+    """
+    - Zero pads the object frame to match the dimensions of the video frame
+
+    @param obj_frame: an ndarray of pixel values corresponding to the object to be tracked
+    @param master_vid_shape : a tuple containing the dimensions of the video-frame to be analyzed 
+
+    """
+    
+    diff_x, diff_y = tuple(map(lambda i,j: i - j, master_vid_shape, obj_frame.shape)) 
+
+    if ( int(diff_x/2) * 2 != diff_x):
+        pad_ax_0_left  = int(diff_x/2)
+        pad_ax_0_right = int(diff_x/2) + 1
+
+    else: 
+        pad_ax_0_left, pad_ax_1_right = (int(diff_x/2),)*2
+
+
+    if ( int(diff_y/2)*2 != diff_y):
+        pad_ax_1_left  = int(diff_y/2)
+        pad_ax_1_right = int(diff_y/2) + 1
+    else: 
+        pad_ax_1_left,pad_ax_1_right = (int(diff_y/2),)*2
+
+    print(pad_ax_0_left)
+    print(pad_ax_0_right)
+    print(pad_ax_1_left)
+    print(pad_ax_1_right)
+
+    pad_args = ((pad_ax_0_left,pad_ax_0_right),(pad_ax_1_left,pad_ax_1_right))
+    return np.pad(obj_frame,pad_args,'constant',constant_values = (0,))
+
+
+
 def main():
     
     parser = ArgumentParser(description="Set parameters phase correlation calculation")
@@ -57,31 +92,19 @@ def main():
     
     args = parser.parse_args()
     
-    # infile1 = open(args.infile1)
-    # infile2 = open(args.infile2)
-    # outfile = args.outfile
-    # newfile = open(outfile, 'w')
-    
-    # road1 = misc.imread(infile1)
-    # road2 = misc.imread(infile2)
 
     road1 = cv2.imread(args.infile1, 0)
     road2 = cv2.imread(args.infile2, 0)
 
-    print (road1.shape)
-    print (road2.shape)
+    print(road1.shape)
+    print(road2.shape)
 
-    result = phase_correlation(road1, road2)
+    padded_frame = pad_image(road1,road2.shape)
+  
+    result = phase_correlation(padded_frame, road2)
+    plot_results(result)
+    print (np.argmax(result))
 
-    fig = plt.figure()
-    ax  = fig.add_subplot(111, projection = '3d')
-    ax.plot(result[:,0], result[:,1],result[:,3])
-    plt.show()
-
-    result = np.multiply(result, 10^3)
-
-    # cv2.imshow('result',result)
-    # cv2.imwrite(args.outfile,result)
 
 
 if __name__=="__main__":
