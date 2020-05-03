@@ -3,7 +3,6 @@ Phase correlation implementation in Python using cv2 and numpy
 """
 
 import cv2
-from argparse import ArgumentParser
 from mpl_toolkits import mplot3d
 
 import matplotlib.pyplot as plt
@@ -15,15 +14,16 @@ import numpy as np
 
 def phase_correlation(a, b):
 
-    G_a = np.fft.fft2(a)
+    delta = 0.1
+
+    G_a = np.fft.fft2(a,s=b.shape)
     G_b = np.fft.fft2(b)
 
     conj_b = np.ma.conjugate(G_b)
-    
-    R = G_a*conj_b
+    r = np.multiply(G_a,conj_b)
 
-    R /= np.absolute(R)
-    r = np.fft.ifft2(R).real
+    r = np.divide(r,np.absolute(r+delta))
+    r = np.fft.ifft2(r).real
     return r
 
 
@@ -48,6 +48,7 @@ def plot_results(map):
     plt.show()
 
 def pad_image (obj_frame, master_vid_shape):
+
     """
     - Zero pads the object frame to match the dimensions of the video frame
 
@@ -72,11 +73,6 @@ def pad_image (obj_frame, master_vid_shape):
     else: 
         pad_ax_1_left,pad_ax_1_right = (int(diff_y/2),)*2
 
-    print(pad_ax_0_left)
-    print(pad_ax_0_right)
-    print(pad_ax_1_left)
-    print(pad_ax_1_right)
-
     pad_args = ((pad_ax_0_left,pad_ax_0_right),(pad_ax_1_left,pad_ax_1_right))
     return np.pad(obj_frame,pad_args,'constant',constant_values = (0,))
 
@@ -84,28 +80,36 @@ def pad_image (obj_frame, master_vid_shape):
 
 def main():
     
-    parser = ArgumentParser(description="Set parameters phase correlation calculation")
-    
-    parser.add_argument("infile1", metavar="in1", help="input image 1")    
-    parser.add_argument("infile2", metavar="in2", help="input image 2")
-    parser.add_argument("outfile", metavar="out", help="output image file name")
-    
-    args = parser.parse_args()
+    """
+    Tracking flow: 
+    - load video 
+    - specify ROI/bounding box through user input
+    - for each frame:
+        - take previous bounding box coordinates and create 4 candidate blocks
+        - do phase correlation for each of them 
+        - whichever one has the highest peak probably corresponds to the new object
+        - redraw the bounding box
     
 
-    road1 = cv2.imread(args.infile1, 0)
-    road2 = cv2.imread(args.infile2, 0)
+    """
+    
 
-    print(road1.shape)
-    print(road2.shape)
+    road1 = cv2.imread('test_frame.PNG')
+    road2 = cv2.imread('test_img_full.png')
+
+    road1 = cv2.cvtColor(road1,cv2.COLOR_BGR2GRAY)
+    road2 = cv2.cvtColor(road2,cv2.COLOR_BGR2GRAY)
 
     padded_frame = pad_image(road1,road2.shape)
   
-    result = phase_correlation(padded_frame, road2)
+    result = phase_correlation(road1, road2)
     plot_results(result)
-    print (np.argmax(result))
 
-
+    peak = np.amax(result)
+    idx = np.where(result == peak)
+    print(idx)
+    print(result[227,236])
+    print(peak)
 
 if __name__=="__main__":
     main()
